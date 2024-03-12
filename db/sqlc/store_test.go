@@ -105,3 +105,50 @@ func TestTransferTx(t *testing.T) {
 	fmt.Println(">> After TX: ", updatedAccount1.Balance, updatedAccount2.Balance)
 
 }
+
+func TestTransferTxDeadLock(t *testing.T) {
+	store := NewStore(testDB)
+
+	account1 := createRandomTestAccount(t)
+	account2 := createRandomTestAccount(t)
+
+	fmt.Println(">> Before TX: ", account1.Balance, account2.Balance)
+
+	n := 10
+	amount := int64(10)
+
+	errs := make(chan error)
+
+	for i := 0; i < n; i++ {
+		fromAccountId := account1.ID
+		toAccountId := account2.ID
+		if i%2 == 0 {
+			fromAccountId, toAccountId = toAccountId, fromAccountId
+		}
+		go func() {
+			_, err := store.transferTx(context.Background(), TransferTxParams{FromAccountID: fromAccountId, ToAccountID: toAccountId, Amount: amount})
+
+			errs <- err
+		}()
+	}
+
+	//check result s
+
+	for i := 0; i < n; i++ {
+		err := <-errs
+		require.NoError(t, err)
+
+	}
+
+	// check the final updated balance
+	updatedAccount1, err := store.GetAccount(context.Background(), account1.ID)
+	require.NoError(t, err)
+	require.Equal(t, account1.Balance, updatedAccount1.Balance)
+
+	updatedAccount2, err := store.GetAccount(context.Background(), account2.ID)
+	require.NoError(t, err)
+	require.Equal(t, account2.Balance, updatedAccount2.Balance)
+
+	fmt.Println(">> After TX: ", updatedAccount1.Balance, updatedAccount2.Balance)
+
+}
