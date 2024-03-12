@@ -38,7 +38,7 @@ jobs:
 
       - name: Install migrate
         run: |
-          curl -L -o https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-386.tar.gz | tar xvz
+          curl -L -o migrate.linux-386.tar.gz https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-386.tar.gz | tar xvz
           sudo mv migrate.linux-386.tar.gz /user/bin/migrate
           which migrate
       - name: migrate database up
