@@ -7,8 +7,8 @@ import (
 )
 
 type Store interface {
+	TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error)
 	Querier
-	transferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error)
 }
 
 type SQLStore struct {
@@ -54,7 +54,7 @@ type TransferTxResult struct {
 	ToEntry     Entry    `json:_to_ntry`
 }
 
-func (store *SQLStore) transferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
+func (store *SQLStore) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {
 	var result TransferTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
