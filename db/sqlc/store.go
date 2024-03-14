@@ -41,17 +41,17 @@ func (store *SQLStore) execTx(ctx context.Context, fn func(*Queries) error) erro
 }
 
 type TransferTxParams struct {
-	FromAccountID int64 `json:from_account_id`
-	ToAccountID   int64 `json:to_account_id`
-	Amount        int64 `json:amount`
+	FromAccountID int64 `json:"from_account_id"`
+	ToAccountID   int64 `json:"to_account_id"`
+	Amount        int64 `json:"amount"`
 }
 
 type TransferTxResult struct {
-	Transfer    Transfer `json:transger`
-	FromAccount Account  `json:from_account`
-	ToAccount   Account  `json:to_account`
-	FromEntry   Entry    `json:from_entry`
-	ToEntry     Entry    `json:_to_ntry`
+	Transfer    Transfer `json:"transfer"`
+	FromAccount Account  `json:"from_account"`
+	ToAccount   Account  `json:"to_account"`
+	FromEntry   Entry    `json:"from_entry"`
+	ToEntry     Entry    `json:"_to_ntry"`
 }
 
 func (store *SQLStore) TransferTx(ctx context.Context, arg TransferTxParams) (TransferTxResult, error) {

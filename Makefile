@@ -20,7 +20,7 @@ test:
 	go test -v -cover ./...
 
 start: 
-	docker run postgres16
+	docker start postgres16
 
 server:
 	go run main.go
