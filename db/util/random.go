@@ -33,6 +33,6 @@ func RandomMoney() int64 {
 	return RandomInt(200, 400)
 }
 func RandomCurrency() string {
-	listCurr := []string{"EUR", "USD", "VND"}
+	listCurr := []string{EUR, USD, VND}
 	return listCurr[rand.Intn(len(listCurr))]
 }
