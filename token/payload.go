@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	ErrorInvalidToken = errors.New("token is invalid")
-	ErrorExpiredToken = errors.New("token is expired")
+	ErrExpiredToken = errors.New("token is expired")
+	ErrInvalidToken = errors.New("token is invalid")
 )
 
 type Payload struct {
@@ -24,18 +24,17 @@ func NewPayload(username string, duration time.Duration) (*Payload, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload := &Payload{
+	return &Payload{
 		ID:        tokenID,
 		Username:  username,
-		IssuedAt:  time.Now(),
 		ExpiredAt: time.Now().Add(duration),
-	}
-	return payload, nil
+		IssuedAt:  time.Now(),
+	}, nil
 }
 
 func (payload *Payload) Valid() error {
 	if time.Now().After(payload.ExpiredAt) {
-		return ErrorExpiredToken
+		return ErrExpiredToken
 	}
 	return nil
 }
