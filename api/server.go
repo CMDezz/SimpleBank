@@ -5,40 +5,62 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	db "github.com/techschool/simplebank/db/sqlc"
+	"github.com/techschool/simplebank/token"
+	"github.com/techschool/simplebank/util"
 )
 
 type Server struct {
-	store  db.Store
-	router *gin.Engine
+	store      db.Store
+	tokenMaker token.Maker
+	router     *gin.Engine
+	config     util.Config
 }
 
-func NewServer(store db.Store) *Server {
-	server := &Server{
-		store: store,
+func NewServer(config util.Config, store db.Store) (*Server, error) {
+	tokenMaker, err := token.NewPasetoMaker(config.TokenSymmetricKey)
+	if err != nil {
+		return nil, err
 	}
-	router := gin.Default()
+
+	server := &Server{
+		config:     config,
+		store:      store,
+		tokenMaker: tokenMaker,
+	}
 
 	//add custom validator
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterValidation("currency", validCurrency)
 	}
 
-	//router section
-	router.POST("/accounts/", server.createAccount)
-	router.GET("/accounts/:id", server.getAccountById)
-	router.GET("/accounts/", server.listAccounts)
-	// router.DELETE("/accounts/:id", server.deleteAccount)
-	router.PUT("/accounts", server.updateAccount)
+	server.SetUpRouter()
+	return server, nil
+}
 
-	router.POST("/transfers/", server.createTransfer)
+func (server *Server) SetUpRouter() {
+	router := gin.Default()
 
 	//user
+	router.POST("/users/login", server.loginUser)
 	router.POST("/users/", server.createUser)
-	router.GET("/users/", server.getUserByUserName)
-	//end
 
+	//auth group
+	authRoutes := router.Group("/").Use(authMiddleware(server.tokenMaker))
+
+	authRoutes.GET("/users/", server.getUserByUserName)
+
+	//router section
+	authRoutes.POST("/accounts/", server.createAccount)
+	authRoutes.GET("/accounts/:id", server.getAccountById)
+	authRoutes.GET("/accounts/", server.listAccounts)
+	// router.DELETE("/accounts/:id", server.deleteAccount)
+	authRoutes.PUT("/accounts", server.updateAccount)
+
+	authRoutes.POST("/transfers/", server.createTransfer)
+
+	//end
 	server.router = router
-	return server
+
 }
 
 func (server *Server) Start(address string) error {
