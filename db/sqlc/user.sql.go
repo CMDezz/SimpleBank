@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -53,6 +54,43 @@ WHERE username = $1 LIMIT 1
 
 func (q *Queries) GetUser(ctx context.Context, username string) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUser, username)
+	var i User
+	err := row.Scan(
+		&i.Username,
+		&i.HasedPassword,
+		&i.Email,
+		&i.FullName,
+		&i.PasswordChangedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateUser = `-- name: UpdateUser :one
+UPDATE users
+SET 
+    hased_password = COALESCE($1,hased_password),
+    full_name =COALESCE($2,full_name),
+    email = COALESCE($3,email)
+WHERE 
+    username = $4
+RETURNING username, hased_password, email, full_name, password_changed_at, created_at
+`
+
+type UpdateUserParams struct {
+	HasedPassword sql.NullString `json:"hased_password"`
+	FullName      sql.NullString `json:"full_name"`
+	Email         sql.NullString `json:"email"`
+	Username      string         `json:"username"`
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUser,
+		arg.HasedPassword,
+		arg.FullName,
+		arg.Email,
+		arg.Username,
+	)
 	var i User
 	err := row.Scan(
 		&i.Username,
