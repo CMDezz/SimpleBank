@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 	db "github.com/techschool/simplebank/db/sqlc"
 	"github.com/techschool/simplebank/util"
@@ -25,6 +26,15 @@ type userResponse struct {
 	FullName          string    `json:"full_name"`
 	PasswordChangedAt time.Time `json:"password_changed_at"`
 	CreatedAt         time.Time `json:"created_at"`
+}
+
+type refreshAccessTokenResponse struct {
+	AccessToken          string    `json:"access_token"`
+	AccessTokenExpriesAt time.Time `json:"access_token_expires_at"`
+}
+
+type refreshAccessTokenRequest struct {
+	RefeshToken string `json:"refresh_token" binding:"required"`
 }
 
 func NewUserResponse(user db.User) userResponse {
@@ -105,13 +115,17 @@ func (server *Server) getUserByUserName(ctx *gin.Context) {
 }
 
 type loginUserRequest struct {
-	UserName string `json:"username" binding:"required"`
+	UserName string `json:"username" binding:"required,alphanum"`
 	Password string `json:"password" binding:"required"`
 }
 
 type loginUserRespone struct {
-	AccessToken string       `json:"access_token"`
-	User        userResponse `json:user`
+	SessionId           uuid.UUID    `json:"session_id"`
+	User                userResponse `json:"user"`
+	AccessToken         string       `json:"access_token"`
+	AccessTokenExpired  time.Time    `json:"access_token_expired"`
+	RefreshToken        string       `json:"refresh_token"`
+	RefreshTokenExpired time.Time    `json:"refresh_token_expired"`
 }
 
 func (server *Server) loginUser(ctx *gin.Context) {
@@ -122,7 +136,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
-
+	fmt.Println(req.UserName)
 	//get user
 	user, err := server.store.GetUser(ctx, req.UserName)
 	if err != nil {
@@ -143,15 +157,95 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	}
 
 	//create token
-	accessToken, err := server.tokenMaker.CreateToken(user.Username, server.config.AccessTokenDuration)
+	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, server.config.AccessTokenDuration)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
+
+	//refresh token
+	refreshToken, refreshPayload, err := server.tokenMaker.CreateToken(user.Username, server.config.RefreshTokenDuration)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	session, err := server.store.CreateSessions(ctx, db.CreateSessionsParams{
+		ID:           refreshPayload.ID,
+		Username:     user.Username,
+		RefreshToken: refreshToken,
+		UserAgent:    ctx.Request.UserAgent(),
+		ClientIp:     ctx.ClientIP(),
+		IsBlocked:    false,
+		ExpiresAt:    refreshPayload.ExpiredAt,
+	})
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
 	userResponse := NewUserResponse(user)
 	ctx.JSON(http.StatusOK, loginUserRespone{
-		User:        userResponse,
-		AccessToken: accessToken,
+		SessionId:           session.ID,
+		User:                userResponse,
+		AccessToken:         accessToken,
+		AccessTokenExpired:  accessPayload.ExpiredAt,
+		RefreshToken:        refreshToken,
+		RefreshTokenExpired: refreshPayload.ExpiredAt,
+	})
+	return
+}
+
+func (server *Server) RefreshAccessToken(ctx *gin.Context) {
+	var req refreshAccessTokenRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+	refreshPayload, err := server.tokenMaker.ValidToken(req.RefeshToken)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	session, err := server.store.GetSessions(ctx, refreshPayload.ID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, errorResponse(err))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	if session.IsBlocked {
+		err = fmt.Errorf("token is blocked")
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	if session.Username != refreshPayload.Username {
+		err = fmt.Errorf("token mismatch payload infomation")
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	if time.Now().After(refreshPayload.ExpiredAt) {
+		err = fmt.Errorf("refresh token is expired")
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	accessToken, accessTokenPayload, err := server.tokenMaker.CreateToken(refreshPayload.Username, server.config.AccessTokenDuration)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, &refreshAccessTokenResponse{
+		AccessToken:          accessToken,
+		AccessTokenExpriesAt: accessTokenPayload.ExpiredAt,
 	})
 	return
 }

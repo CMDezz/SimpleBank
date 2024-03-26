@@ -19,7 +19,7 @@ func TestCreateJWTTokenOk(t *testing.T) {
 	jwtMarker, err := NewMaker(secretKey)
 	require.NoError(t, err)
 
-	token, err := jwtMarker.CreateToken(username, duration)
+	token, _, err := jwtMarker.CreateToken(username, duration)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
@@ -40,7 +40,7 @@ func TestExpiredJWTToken(t *testing.T) {
 	jwtMarker, err := NewMaker(secretKey)
 	require.NoError(t, err)
 
-	token, err := jwtMarker.CreateToken(username, -duration)
+	token, _, err := jwtMarker.CreateToken(username, -duration)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 

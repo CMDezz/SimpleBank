@@ -18,7 +18,7 @@ func TestCreatePasetoTokenOk(t *testing.T) {
 	pasetoMaker, err := NewPasetoMaker(symmetricKey)
 	require.NoError(t, err)
 
-	token, err := pasetoMaker.CreateToken(username, duration)
+	token, _, err := pasetoMaker.CreateToken(username, duration)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
@@ -38,7 +38,7 @@ func TestExpiredPasetoToken(t *testing.T) {
 	pasetoMaker, err := NewMaker(symmetricKey)
 	require.NoError(t, err)
 
-	token, err := pasetoMaker.CreateToken(username, -duration)
+	token, _, err := pasetoMaker.CreateToken(username, -duration)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
