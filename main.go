@@ -10,10 +10,13 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/golang/mock/mockgen/model"
+	"github.com/hibiken/asynq"
 	_ "github.com/lib/pq"
+	logZe "github.com/rs/zerolog/log"
 	"github.com/techschool/simplebank/api"
 	db "github.com/techschool/simplebank/db/sqlc"
 	"github.com/techschool/simplebank/util"
+	"github.com/techschool/simplebank/worker"
 )
 
 func main() {
@@ -30,8 +33,14 @@ func main() {
 	//run db migration
 	runDbMigratio(config.MigrationSource, config.DbSource)
 
+	redisOpt := asynq.RedisClientOpt{
+		Addr: config.RedisAddress,
+	}
+	taskDistributor := worker.NewRedisTaskDistributor(&redisOpt)
+
 	store := db.NewStore(conn)
-	server, err := api.NewServer(config, store)
+	go runTaskProcessor(redisOpt, store)
+	server, err := api.NewServer(config, store, taskDistributor)
 	if err != nil {
 		log.Fatal("Server cannot be started: ", err)
 		return
@@ -41,6 +50,17 @@ func main() {
 	if err != nil {
 		log.Fatal("Server cannot be started: ", err)
 	}
+}
+
+func runTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) {
+	taskProcessor := worker.NewRedisTaskProcessor(redisOpt, store)
+	logZe.Info().Msg("starting task processor")
+	err := taskProcessor.Start()
+	if err != nil {
+		log.Fatal("error when start task processor ", err)
+	}
+	logZe.Info().Msg("started task processor")
+
 }
 
 func runDbMigratio(migrationDir string, databaseSource string) {

@@ -23,7 +23,7 @@ sqlc:
 	sqlc generate
 
 test: 
-	go test -v -cover ./...
+	go test -v -cover -short ./...
 
 start: 
 	docker start postgres16
@@ -34,4 +34,7 @@ server:
 mock:
 	mockgen -destination db/mock/store.go -package mockdb github.com/techschool/simplebank/db/sqlc Store
 
-.PHONY: postgres createdb dropdb migrateup migratedown sqlc test server mock migrateup1 migratedown1
+redis:
+	docker run --name redis -p 6379:6379 -d redis:7-alpine
+
+.PHONY: postgres createdb dropdb migrateup migratedown sqlc test server mock migrateup1 migratedown1 redis

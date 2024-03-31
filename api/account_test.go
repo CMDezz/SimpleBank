@@ -12,17 +12,20 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/require"
 	mockdb "github.com/techschool/simplebank/db/mock"
 	db "github.com/techschool/simplebank/db/sqlc"
 	"github.com/techschool/simplebank/token"
 	"github.com/techschool/simplebank/util"
+	"github.com/techschool/simplebank/worker"
 )
 
 func TestGetAccountApi(t *testing.T) {
 	user, _ := RandomUser(t)
 	account := RandomAccount(user.Username)
 
+	taskDisibutor := worker.NewRedisTaskDistributor(&asynq.RedisClientOpt{})
 	testCase := []struct {
 		name          string
 		ID            int64
@@ -95,7 +98,7 @@ func TestGetAccountApi(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			//create stubs
 			tc.buildStubs(store)
-			server := newTestServer(t, store)
+			server := newTestServer(t, store, taskDisibutor)
 			recorder := httptest.NewRecorder()
 			url := fmt.Sprintf("/accounts/%d", tc.ID)
 

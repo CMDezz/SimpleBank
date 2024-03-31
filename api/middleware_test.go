@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/require"
 	"github.com/techschool/simplebank/token"
+	"github.com/techschool/simplebank/worker"
 )
 
 func addAuthorization(
@@ -28,6 +30,8 @@ func addAuthorization(
 }
 
 func TestAuthMiddleware(t *testing.T) {
+	taskDistributor := worker.NewRedisTaskDistributor(&asynq.RedisClientOpt{})
+
 	testCase := []struct {
 		name          string
 		setupAuth     func(t *testing.T, request *http.Request, maker token.Maker)
@@ -83,7 +87,7 @@ func TestAuthMiddleware(t *testing.T) {
 	for i := range testCase {
 		tc := testCase[i]
 		t.Run(tc.name, func(t *testing.T) {
-			server := newTestServer(t, nil)
+			server := newTestServer(t, nil, taskDistributor)
 
 			authPath := "/auth"
 			server.router.GET(

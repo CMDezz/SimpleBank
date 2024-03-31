@@ -13,10 +13,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
+	"github.com/hibiken/asynq"
 	"github.com/stretchr/testify/require"
 	mockdb "github.com/techschool/simplebank/db/mock"
 	db "github.com/techschool/simplebank/db/sqlc"
 	"github.com/techschool/simplebank/util"
+	"github.com/techschool/simplebank/worker"
 )
 
 // var ErrRecordNotFound = pgx.ErrNoRows
@@ -88,13 +90,19 @@ func TestCreateUserApi(t *testing.T) {
 	for i := range testCase {
 		tc := testCase[i]
 		t.Run(tc.name, func(t *testing.T) {
+			config, err := util.LoadConfig(".")
+			redisOpt := asynq.RedisClientOpt{
+				Addr: config.RedisAddress,
+			}
+			taskDistributor := worker.NewRedisTaskDistributor(&redisOpt)
+
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store)
+			server := newTestServer(t, store, taskDistributor)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)
@@ -220,7 +228,7 @@ func TestLoginUserApi(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newTestServer(t, store)
+			server := newTestServer(t, store, nil)
 			recorder := httptest.NewRecorder()
 
 			data, err := json.Marshal(tc.body)

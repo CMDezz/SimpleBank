@@ -11,6 +11,11 @@ import (
 	db "github.com/techschool/simplebank/db/sqlc"
 )
 
+const (
+	CriticalQueue = "critical"
+	DefaultQueue  = "default"
+)
+
 type TaskProcessor interface {
 	Start() error
 	ProcessSendTaskVerifyEmail(ctx context.Context, task *asynq.Task) error
@@ -22,7 +27,17 @@ type RedisTaskProcessor struct {
 }
 
 func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) TaskProcessor {
-	server := asynq.NewServer(redisOpt, asynq.Config{})
+	server := asynq.NewServer(redisOpt, asynq.Config{
+
+		Queues: map[string]int{
+			CriticalQueue: 10,
+			DefaultQueue:  5,
+		},
+		ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
+			log.Error().Err(err).Str("type :", task.Type()).Bytes("payload :", task.Payload()).Msg("failed to process task")
+		}),
+		Logger: NewLogger(),
+	})
 	return &RedisTaskProcessor{
 		server: server,
 		store:  store,
@@ -36,7 +51,7 @@ func (processor *RedisTaskProcessor) Start() error {
 
 	err := processor.server.Start(mux)
 	if err != nil {
-		return fmt.Errorf("cannot start processor %s: ", TaskSendVerifyEmail, err)
+		return fmt.Errorf("cannot start processor %s: %s", TaskSendVerifyEmail, err)
 	}
 
 	return nil
