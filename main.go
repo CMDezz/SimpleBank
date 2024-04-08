@@ -15,6 +15,7 @@ import (
 	logZe "github.com/rs/zerolog/log"
 	"github.com/techschool/simplebank/api"
 	db "github.com/techschool/simplebank/db/sqlc"
+	"github.com/techschool/simplebank/mail"
 	"github.com/techschool/simplebank/util"
 	"github.com/techschool/simplebank/worker"
 )
@@ -39,7 +40,7 @@ func main() {
 	taskDistributor := worker.NewRedisTaskDistributor(&redisOpt)
 
 	store := db.NewStore(conn)
-	go runTaskProcessor(redisOpt, store)
+	go runTaskProcessor(config, redisOpt, store)
 	server, err := api.NewServer(config, store, taskDistributor)
 	if err != nil {
 		log.Fatal("Server cannot be started: ", err)
@@ -52,8 +53,9 @@ func main() {
 	}
 }
 
-func runTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) {
-	taskProcessor := worker.NewRedisTaskProcessor(redisOpt, store)
+func runTaskProcessor(config util.Config, redisOpt asynq.RedisClientOpt, store db.Store) {
+	mailer := mail.NewGmailSender("", config.EmailSenderAddress, config.EmailSenderPassword)
+	taskProcessor := worker.NewRedisTaskProcessor(redisOpt, store, mailer)
 	logZe.Info().Msg("starting task processor")
 	err := taskProcessor.Start()
 	if err != nil {

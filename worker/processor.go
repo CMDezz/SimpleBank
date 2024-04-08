@@ -9,6 +9,8 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
 	db "github.com/techschool/simplebank/db/sqlc"
+	"github.com/techschool/simplebank/mail"
+	"github.com/techschool/simplebank/util"
 )
 
 const (
@@ -24,9 +26,10 @@ type TaskProcessor interface {
 type RedisTaskProcessor struct {
 	server *asynq.Server
 	store  db.Store
+	mailer mail.EmailSender
 }
 
-func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) TaskProcessor {
+func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store, mailer mail.EmailSender) TaskProcessor {
 	server := asynq.NewServer(redisOpt, asynq.Config{
 
 		Queues: map[string]int{
@@ -41,6 +44,7 @@ func NewRedisTaskProcessor(redisOpt asynq.RedisClientOpt, store db.Store) TaskPr
 	return &RedisTaskProcessor{
 		server: server,
 		store:  store,
+		mailer: mailer,
 	}
 }
 
@@ -71,6 +75,30 @@ func (processor *RedisTaskProcessor) ProcessSendTaskVerifyEmail(ctx context.Cont
 		return fmt.Errorf("failed to get user %w", err)
 	}
 	//send email here
+	verify_email, err := processor.store.CreateVerifyEmail(ctx, db.CreateVerifyEmailParams{
+		Username:   user.Username,
+		Email:      user.Email,
+		SecretCode: util.RandomString(32),
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create verify_email %w", err)
+	}
+
+	verifyEmailUrl := fmt.Sprintf("http://simple-bank.org/verify_email?id=%d&secretCode=%s", verify_email.ID, verify_email.SecretCode)
+
+	subject := "Welcome to Simple Bank"
+	content := fmt.Sprintf(`Hello %s,<br/> 
+	Thank you for registering with us.<br/>
+	<a href="%s" target="_blank">Click here to verify your email address!</a>
+	`, user.FullName, verifyEmailUrl)
+	to := []string{user.Email}
+
+	err = processor.mailer.SendEmail(subject, content, to, nil, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to send verify_email %w", err)
+	}
+
 	log.Info().Str("type", task.Type()).Bytes("payload", task.Payload()).Str("email", user.Email).Msg("proccessed task")
 	return nil
 }
